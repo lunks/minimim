@@ -22,4 +22,4 @@ function current_dir {
     fi
 }
 
-PROMPT='%F{green}${_prompt_sorin_pwd}%f %F{red}‹$(rvm-prompt v g 2>/dev/null)›%f${vcs_info_msg_0_} %B$%b '
+PROMPT='%F{green}${_prompt_sorin_pwd}%f %F{red}‹$(rbenv version | sed -e "s/ (set.*$//")›%f${vcs_info_msg_0_} %B$%b '
