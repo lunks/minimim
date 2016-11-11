@@ -3,7 +3,15 @@ function PCMD() {
 }
 
 function RCMD() {
-echo "$(git_prompt_string) %F{red}%B(%b%F{red}$(asdf local ruby)%B)%b %F{green}%B(%b%F{green}$(asdf local nodejs)%B)%b"
+echo "$(git_prompt_string) %F{red}%B(%b%F{red}$(ruby_version)%B)%b %F{green}%B(%b%F{green}$(nodejs_version)%B)%b%{$reset_color%}"
+}
+
+function ruby_version() {
+  echo $(asdf current ruby | grep -o '[0-9.A-Za-z]*')
+}
+
+function nodejs_version() {
+  echo $(asdf current nodejs | grep -o '[0-9.A-Za-z]*')
 }
 
 PROMPT='$(PCMD)'
@@ -156,3 +164,6 @@ function TRAPUSR1() {
     # redisplay
     zle && zle reset-prompt
 }
+
+
+
