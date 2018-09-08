@@ -1,17 +1,25 @@
 function PCMD() {
-  echo "%F{green}$(PR_DIR) %B$%b "
+  echo "%F{green}$(PR_DIR) %B$%b {$reset_color%}"
 }
 
 function RCMD() {
-echo "$(git_prompt_string) %F{red}%B(%b%F{red}$(ruby_version)%B)%b %F{green}%B(%b%F{green}$(nodejs_version)%B)%b%{$reset_color%}"
+echo "$(git_prompt_string)$(ruby_version)$(nodejs_version){$reset_color%}"
 }
 
 function ruby_version() {
-  echo $(asdf current ruby | grep -o '[0-9.A-Za-z]*')
+    (( $+commands[ruby] )) || return 1
+    test -f Gemfile || return 1
+  $MM_RUBY_PROMPT=$(asdf current ruby | grep -o '[0-9.A-Za-z]*')
+
+  echo " %F{red}%B(%b%F{red}$MM_RUBY_PROMPT%B)%b"
 }
 
 function nodejs_version() {
-  echo $(asdf current nodejs | grep -o '[0-9.A-Za-z]*')
+
+  (( $+commands[node] )) || return 1
+  test -f package.json || return 1
+  $MM_NODE_PROMPT=$(asdf current nodejs | grep -o '[0-9.A-Za-z]*')
+  echo " %F{green}%B(%b%F{green}$MM_NODE_PROMPT%B)%b%"
 }
 
 PROMPT='$(PCMD)'
