@@ -1,61 +1,45 @@
 function PCMD() {
-  echo "%F{green}$(PR_DIR) %B$%b {$reset_color%}"
+  echo "%F{green}$(PR_DIR) %B$%b %{$reset_color%}"
 }
 
 function RCMD() {
-echo "$(git_prompt_string)$(ruby_version)$(nodejs_version){$reset_color%}"
+echo "$(git_prompt_string)$(ruby_version)$(nodejs_version)%{$reset_color%}"
 }
 
 function ruby_version() {
-    (( $+commands[ruby] )) || return 1
-    test -f Gemfile || return 1
-  $MM_RUBY_PROMPT=$(asdf current ruby | grep -o '[0-9.A-Za-z]*')
+  (( $+commands[ruby] )) || return 1
+  test -f Gemfile || return 1
+  MM_RUBY_FULL="$(ruby -v 2>/dev/null)"
+  [[ $MM_RUBY_FULL =~ 'ruby ([0-9A-Za-z.]+)p[0-9]+' ]]
+  MM_RUBY_VERSION=$match[1]
 
-  echo " %F{red}%B(%b%F{red}$MM_RUBY_PROMPT%B)%b"
+  echo " %F{red}%B(%b%F{red}$MM_RUBY_VERSION%B)%b"
 }
 
 function nodejs_version() {
-
   (( $+commands[node] )) || return 1
   test -f package.json || return 1
-  $MM_NODE_PROMPT=$(asdf current nodejs | grep -o '[0-9.A-Za-z]*')
-  echo " %F{green}%B(%b%F{green}$MM_NODE_PROMPT%B)%b%"
+  MM_NODE_FULL="$(node -v 2>/dev/null)"
+  [[ $MM_NODE_FULL =~ 'v([0-9A-Za-z.]+)' ]]
+  MM_NODE_VERSION=$match[1]
+  echo " %F{green}%B(%b%F{green}$MM_NODE_VERSION%B)%b"
 }
 
 PROMPT='$(PCMD)'
 RPROMPT='' # no initial prompt, set dynamically
 
 function PR_DIR() {
-    local sub=${1}
-    if [[ "${sub}" == "" ]]; then
-        sub=1
-    fi
-    local len="$(expr ${sub} + 1)"
-    local full="$(print -P "%d")"
-    local relfull="$(print -P "%~")"
-    local shorter="$(print -P "%${len}~")"
-    local current="$(print -P "%${len}(~:/:)%${sub}~")"
-    local last="$(print -P "%1~")"
+    local start_path="$(print -P "%-1~")"
+    local end_path="$(print -P "%2~")"
 
-    # Longer path for '~/...'
-    if [[ "${shorter}" == \~/* ]]; then
-        current=${shorter}
+
+    local prompt="$start_path/$end_path"
+
+    if [[ $end_path = *"$start_path"* ]] ; then
+      prompt="$end_path"
     fi
 
-    local truncated="$(echo "${current%/*}/")"
-
-    # Handle special case of directory '/' or '~something'
-    if [[ "${truncated}" == "/" || "${relfull[1,-2]}" != */* ]]; then
-        truncated=""
-    fi
-
-    # Handle special case of last being '/...' one directory down
-    if [[ "${full[2,-1]}" != "" && "${full[2,-1]}" != */* ]]; then
-        truncated="/"
-        last=${last[2,-1]} # take substring
-    fi
-
-    echo "%{$fg[green]%}${truncated}%{$fg[orange]%}%B${last}%b%{$reset_color%}"
+    echo "$prompt"
 }
 
 # Set RHS prompt for git repositories
