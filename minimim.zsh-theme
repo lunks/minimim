@@ -5,7 +5,14 @@ typeset -g prompt_command_timestamp
 typeset -g prompt_command_elapsed
 
 function PCMD() {
-  echo "%F{green}$(PR_DIR) %B$%b %{$reset_color%}"
+  echo "%F{green}$(PR_DIR) %B$(shell_status)%b %{$reset_color%}"
+}
+
+function shell_status() {
+  if [[ $? != 0 ]]; then
+    echo "ooo"
+  fi
+  echo "%(?.$.%F{red}$)"
 }
 
 function RCMD() {
