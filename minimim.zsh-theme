@@ -42,17 +42,8 @@ PROMPT='$(PCMD)'
 RPROMPT='' # no initial prompt, set dynamically
 
 function PR_DIR() {
-  local start_path="$(print -P "%-1~")"
-  local end_path="$(print -P "%2~")"
-
-
-  local prompt="$start_path/$end_path"
-
-  if [[ $end_path = *"$start_path"* ]] ; then
-    prompt="$end_path"
-  fi
-
-  echo "$prompt"
+  # from https://github.com/robbyrussell/oh-my-zsh/issues/5068#issuecomment-218780098
+  echo ${${:-/${(j:/:)${(M)${(s:/:)${(D)PWD:h}}#(|.)[^.]}}/${PWD:t}}//\/~/\~}
 }
 
 # Set RHS prompt for git repositories
