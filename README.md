@@ -13,4 +13,4 @@ Just add `antigen theme lunks/minimim` to your `.zshrc`.
 
 # Acknowledgements
 
-Inspired by macovsky, sorin and others I can't quite remember.
+Inspired by macovsky, sorin, geometry and many others.
