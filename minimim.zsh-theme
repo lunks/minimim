@@ -23,7 +23,7 @@ function ruby_version() {
   (( $+commands[ruby] )) || return 1
   test -f Gemfile || return 1
   MM_RUBY_FULL="$(ruby -v 2>/dev/null)"
-  [[ $MM_RUBY_FULL =~ 'ruby ([0-9A-Za-z.]+)p[0-9]+' ]]
+  [[ $MM_RUBY_FULL =~ 'ruby ([0-9A-Za-z.]+)(p[0-9]+)?' ]]
   MM_RUBY_VERSION=$match[1]
 
   echo " %F{red}%B(%b%F{red}$MM_RUBY_VERSION%B)%b"
