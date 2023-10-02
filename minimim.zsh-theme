@@ -3,6 +3,7 @@ zmodload zsh/datetime || return
 
 typeset -g prompt_command_timestamp
 typeset -g prompt_command_elapsed
+setopt prompt_subst
 
 function PCMD() {
   echo "%F{green}$(PR_DIR) %B$(shell_status)%b %{$reset_color%}"
@@ -42,8 +43,7 @@ PROMPT='$(PCMD)'
 RPROMPT='' # no initial prompt, set dynamically
 
 function PR_DIR() {
-  # from https://github.com/robbyrussell/oh-my-zsh/issues/5068#issuecomment-218780098
-  echo ${${:-/${(j:/:)${(M)${(s:/:)${(D)PWD:h}}#(|.)[^.]}}/${PWD:t}}//\/~/\~}
+  echo $(shrink_path -f)
 }
 
 # Set RHS prompt for git repositories
