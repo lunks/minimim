@@ -1,15 +1,11 @@
 # minimim
 
-Minimim is a minimalist theme with support for node and ruby version
-output, along with git status info.
+Minimim is a minimalist theme with support a few installed languages,
+along with information about the git repository.
 
-## Installing
+## Install using antidote
 
-
-### Install using antigen
-
-Just add `antigen theme lunks/minimim` to your `.zshrc`.
-
+Just add `lunks/minimim` to your `.zsh_plugins.txt`.
 
 # Acknowledgements
 
