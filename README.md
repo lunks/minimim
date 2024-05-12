@@ -1,6 +1,6 @@
 # minimim
 
-Minimim is a minimalist theme with support a few installed languages,
+Minimim is a minimalist theme with support for a few installed languages,
 along with information about the git repository.
 
 ## Install using antidote
