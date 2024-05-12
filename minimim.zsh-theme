@@ -1,131 +1,142 @@
-# Load zsh/datetime module to be able to access `$EPOCHSECONDS`
+# vim: set filetype=zsh :
+
 zmodload zsh/datetime || return
+
+setopt prompt_subst
 
 typeset -g prompt_command_timestamp
 typeset -g prompt_command_elapsed
-setopt prompt_subst
 
-function PCMD() {
-  echo "%F{green}$(PR_DIR) %B$(shell_status)%b %{$reset_color%}"
+PROMPT='$(build_prompt)'
+RPROMPT=''
+
+function build_prompt() {
+  echo "$(current_dir) $(shell_status) "
+}
+
+function current_dir() {
+  echo "%F{green}$(shrink_path -f)%f"
 }
 
 function shell_status() {
-  if [[ $? != 0 ]]; then
-    echo "ooo"
+  echo "%(?.%F{green}%B$%b%f.%F{red}%B$%b%f)"
+}
+
+# start timer for prompt
+function preexec() {
+  prompt_command_timestamp=$EPOCHSECONDS
+}
+
+ASYNC_PROC=0
+function precmd() {
+  local elapsed
+
+  prompt_command_elapsed=
+
+  (( elapsed = EPOCHSECONDS - ${prompt_command_timestamp:-$EPOCHSECONDS} ))
+
+  if (( elapsed > 5 )); then
+    prompt_command_elapsed="$(to_human_time $elapsed)"
   fi
-  echo "%(?.$.%F{red}$)"
+
+  prompt_command_timestamp=
+
+# kill child if still running from previous prompt
+if [[ "${ASYNC_PROC}" != 0 ]]; then
+  kill -s HUP $ASYNC_PROC >/dev/null 2>&1 || :
+fi
+
+# start background computation
+async_update_rprompt &!
+ASYNC_PROC=$!
 }
 
-function RCMD() {
-  echo "$prompt_command_elapsed$(git_prompt_string)$(ruby_version)$(nodejs_version)%{$reset_color%}"
+function build_rprompt() {
+  local widgets=()
+  if [[ -n "${prompt_command_elapsed}" ]]; then
+    widgets+=("${prompt_command_elapsed}")
+  fi
+  widgets+=($(git_prompt_info) $(version_info))
+
+  echo ${(j: :)widgets}
 }
 
-function ruby_version() {
-  (( $+commands[ruby] )) || return 1
-  test -f Gemfile || return 1
-  MM_RUBY_FULL="$(ruby -v 2>/dev/null)"
-  [[ $MM_RUBY_FULL =~ 'ruby ([0-9A-Za-z.]+)(p[0-9]+)?' ]]
-  MM_RUBY_VERSION=$match[1]
-
-  echo " %F{red}%B(%b%F{red}$MM_RUBY_VERSION%B)%b"
+function async_update_rprompt() {
+  printf "%s" "$(build_rprompt)" > "${HOME}/.zsh_tmp_prompt"
+  kill -s USR1 $$
 }
 
-function nodejs_version() {
-  (( $+commands[node] )) || return 1
-  test -f package.json || return 1
-  MM_NODE_FULL="$(node -v 2>/dev/null)"
-  [[ $MM_NODE_FULL =~ 'v([0-9A-Za-z.]+)' ]]
-  MM_NODE_VERSION=$match[1]
-  echo " %F{green}%B(%b%F{green}$MM_NODE_VERSION%B)%b"
+function TRAPUSR1() {
+  # read from temp file
+  RPROMPT="$(cat ${HOME}/.zsh_tmp_prompt)"
+
+# reset proc number
+ASYNC_PROC=0
+
+zle && zle reset-prompt
 }
 
-PROMPT='$(PCMD)'
-RPROMPT='' # no initial prompt, set dynamically
-
-function PR_DIR() {
-  echo $(shrink_path -f)
-}
-
-# Set RHS prompt for git repositories
-DIFF_SYMBOL="-"
-GIT_PROMPT_SYMBOL=""
-GIT_PROMPT_PREFIX="%{$fg[yellow]%}%B(%b%{$reset_color%}"
-GIT_PROMPT_SUFFIX="%{$fg[yellow]%}%B)%b%{$reset_color%}"
-GIT_PROMPT_AHEAD="%{$fg[teal]%}%B+NUM%b%{$reset_color%}"
-GIT_PROMPT_BEHIND="%{$fg[orange]%}%B-NUM%b%{$reset_color%}"
-GIT_PROMPT_MERGING="%{$fg[cyan]%}%Bx%b%{$reset_color%}"
-GIT_PROMPT_UNTRACKED="%{$fg[red]%}%B$DIFF_SYMBOL%b%{$reset_color%}"
-GIT_PROMPT_MODIFIED="%{$fg[yellow]%}%B$DIFF_SYMBOL%b%{$reset_color%}"
-GIT_PROMPT_STAGED="%{$fg[green]%}%B$DIFF_SYMBOL%b%{$reset_color%}"
-GIT_PROMPT_DETACHED="%{$fg[neon]%}%B!%b%{$reset_color%}"
-
-# Show Git branch/tag, or name-rev if on detached head
-function parse_git_branch() {
-  (git symbolic-ref -q HEAD || git name-rev --name-only --no-undefined --always HEAD) 2> /dev/null
-}
-
-function parse_git_detached() {
-  if ! git symbolic-ref HEAD >/dev/null 2>&1; then
-    echo "${GIT_PROMPT_DETACHED}"
+function git_prompt_info() {
+  local git_dir=$(git rev-parse --git-dir 2>/dev/null)
+  if [[ -d "$git_dir" ]]; then
+    local git_stage_info="$(parse_git_stage)"
+    local git_info="$(parse_git_branch_or_detached)"
+    local git_state_info="$(parse_git_state)"
+    echo "%F{yellow}(%f$git_stage_info$git_info$git_state_info%F{yellow})%f"
   fi
 }
 
-# Show different symbols as appropriate for various Git repository states
+function parse_git_branch_or_detached() {
+  local branch_name=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+  if [[ -z $branch_name ]]; then
+    branch_name=$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)
+  fi
+  echo "%F{yellow}$branch_name%f"
+}
+
+function parse_git_stage() {
+  local state=""
+  [[ -n "$(git ls-files --other --exclude-standard)" ]] && state+="%F{red}-%f"
+  [[ -n "$(git diff --stat)" ]] && state+="%F{yellow}-%f"
+  [[ -n "$(git diff --cached --stat)" ]] && state+="%F{green}+%f"
+  echo "$state"
+}
+
 function parse_git_state() {
-  # Compose this value via multiple conditional appends.
-  local GIT_STATE=""
-
-  local NUM_AHEAD="$(git log --oneline @{u}.. 2> /dev/null | wc -l | tr -d ' ')"
-  if [ "$NUM_AHEAD" -gt 0 ]; then
-    GIT_STATE=$GIT_STATE${GIT_PROMPT_AHEAD//NUM/$NUM_AHEAD}
-  fi
-
-  local NUM_BEHIND="$(git log --oneline ..@{u} 2> /dev/null | wc -l | tr -d ' ')"
-  if [ "$NUM_BEHIND" -gt 0 ]; then
-    if [[ -n $GIT_STATE ]]; then
-      GIT_STATE="$GIT_STATE "
-    fi
-    GIT_STATE=$GIT_STATE${GIT_PROMPT_BEHIND//NUM/$NUM_BEHIND}
-  fi
-
-  local GIT_DIR="$(git rev-parse --git-dir 2> /dev/null)"
-  if [ -n $GIT_DIR ] && test -r $GIT_DIR/MERGE_HEAD; then
-    if [[ -n $GIT_STATE ]]; then
-      GIT_STATE="$GIT_STATE "
-    fi
-    GIT_STATE=$GIT_STATE$GIT_PROMPT_MERGING
-  fi
-
-  if [[ -n $(git ls-files --other --exclude-standard :/ 2> /dev/null) ]]; then
-    GIT_DIFF=$GIT_PROMPT_UNTRACKED
-  fi
-
-  if ! git diff --quiet 2> /dev/null; then
-    GIT_DIFF=$GIT_DIFF$GIT_PROMPT_MODIFIED
-  fi
-
-  if ! git diff --cached --quiet 2> /dev/null; then
-    GIT_DIFF=$GIT_DIFF$GIT_PROMPT_STAGED
-  fi
-
-  if [[ -n $GIT_STATE && -n $GIT_DIFF ]]; then
-    GIT_STATE="$GIT_STATE "
-  fi
-  GIT_STATE="$GIT_STATE$GIT_DIFF"
-
-  if [[ -n $GIT_STATE ]]; then
-    echo "$GIT_PROMPT_PREFIX$GIT_STATE$GIT_PROMPT_SUFFIX"
-  fi
+  local state=""
+  local num_ahead=$(git rev-list --count HEAD@{upstream}..HEAD 2>/dev/null)
+  local num_behind=$(git rev-list --count HEAD..HEAD@{upstream} 2>/dev/null)
+  [[ "$num_ahead" -gt 0 ]] && state+="%F{yellow}+${num_ahead}%f"
+  [[ "$num_behind" -gt 0 ]] && state+="%F{yellow}-${num_behind}%f"
+  echo "$state"
 }
 
-# If inside a Git repository, print its branch and state
-RPR_SHOW_GIT=true # Set to false to disable git status in rhs prompt
-function git_prompt_string() {
-  if [[ "${RPR_SHOW_GIT}" == "true" ]]; then
-    local git_where="$(parse_git_branch)"
-    local git_detached="$(parse_git_detached)"
-    [ -n "$git_where" ] && echo " $GIT_PROMPT_SYMBOL$(parse_git_state)$GIT_PROMPT_PREFIX%{$fg[yellow]%}${git_where#(refs/heads/|tags/)}%b$git_detached$GIT_PROMPT_SUFFIX"
+function git_root() {
+  git rev-parse --show-toplevel 2>/dev/null
+}
+
+# function receives a file path and checks if it is present in the current directory or in git root, params are git_root and file_path
+function file_exists() {
+  local git_root="$1"
+  local file_path="$2"
+  [[ -f "$file_path" ]] || [[ -f "$git_root/$file_path" ]]
+}
+
+function version_info() {
+  local info=()
+  local git_root_path="$(git_root)"
+  if [[ -n $git_root_path ]]; then
+    local versions="$(mise current)"
+
+    file_exists "$git_root_path" "Gemfile" && info+=("%F{red}%B($(echo "$versions" | grep ruby | cut -d ' ' -f2))%b%f")
+    file_exists "$git_root_path" "package.json" && info+=("%F{green}%B($(echo "$versions" | grep node | cut -d ' ' -f2))%b%f")
+    file_exists "$git_root_path" "mix.exs" && info+=("%F{magenta}%B($(echo "$versions" | grep elixir | cut -d ' ' -f2)/$(echo "$versions" | grep erlang | cut -d ' ' -f2))%b%f")
+    file_exists "$git_root_path" "Cargo.toml" && info+=("%F{#ff4500}%B($(echo "$versions" | grep rust | cut -d ' ' -f2))%b%f")
+    file_exists "$git_root_path" "go.mod" && info+=("%F{cyan}%B($(echo "$versions" | grep go | cut -d ' ' -f2))%b%f")
+
   fi
+  echo ${(j: :)info}
 }
 
 # from pretty-time-zsh
@@ -143,54 +154,3 @@ function to_human_time() {
 
   echo "$human"
 }
-
-function preexec() {
-  prompt_command_timestamp=$EPOCHSECONDS
-}
-
-ASYNC_PROC=0
-function precmd() {
-  local elapsed
-
-  prompt_command_elapsed=
-
-  (( elapsed = EPOCHSECONDS - ${prompt_command_timestamp:-$EPOCHSECONDS} ))
-
-  if (( elapsed > 5 )); then
-    prompt_command_elapsed="$(to_human_time $elapsed) "
-  fi
-
-  prompt_command_timestamp=
-
-  function async() {
-    # save to temp file
-    printf "%s" "$(RCMD)" > "${HOME}/.zsh_tmp_prompt"
-    # signal parent
-    kill -s USR1 $$
-  }
-
-  # do not clear RPROMPT, let it persist
-
-  # kill child if necessary
-  if [[ "${ASYNC_PROC}" != 0 ]]; then
-    kill -s HUP $ASYNC_PROC >/dev/null 2>&1 || :
-  fi
-
-  # start background computation
-  async &!
-  ASYNC_PROC=$!
-}
-
-function TRAPUSR1() {
-  # read from temp file
-  RPROMPT="$(cat ${HOME}/.zsh_tmp_prompt)"
-
-  # reset proc number
-  ASYNC_PROC=0
-
-  # redisplay
-  zle && zle reset-prompt
-}
-
-
-
